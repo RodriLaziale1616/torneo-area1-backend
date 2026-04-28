@@ -1,0 +1,222 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum MatchStatus {
+  SCHEDULED
+  PLAYED
+  POSTPONED
+  CANCELLED
+}
+
+enum SponsorType {
+  MAIN
+  TOURNAMENT
+  ROUND
+  MATCH
+  STATS
+  SECONDARY
+}
+
+enum PlacementType {
+  HOME_HERO
+  HOME_SECONDARY
+  STANDINGS_TOP
+  STANDINGS_BOTTOM
+  ROUND_HEADER
+  MATCH_CARD
+  RESULTS_HEADER
+  SCORERS_HEADER
+  SPONSORS_PAGE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(ADMIN)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Tournament {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  logoUrl     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  teams       Team[]
+  rounds      Round[]
+  matches     Match[]
+  standings   Standing[]
+  sponsors    Sponsor[]
+  placements  SponsorPlacement[]
+}
+model Team {
+  id           String      @id @default(cuid())
+  tournamentId String
+  name         String
+  shortName    String?
+  logoUrl      String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  players      Player[]
+  homeMatches  Match[]     @relation("HomeTeam")
+  awayMatches  Match[]     @relation("AwayTeam")
+  standings    Standing[]
+  goalEvents   GoalEvent[]
+
+  @@unique([tournamentId, name])
+}
+model Player {
+  id           String    @id @default(cuid())
+  teamId       String
+  name         String
+  number       Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  team         Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  goalEvents   GoalEvent[]
+
+  @@unique([teamId, name])
+}
+
+model Round {
+  id           String      @id @default(cuid())
+  tournamentId String
+  name         String
+  order        Int
+  isCurrent    Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  matches      Match[]
+  placements   SponsorPlacement[]
+
+  @@unique([tournamentId, order])
+}
+
+model Match {
+  id             String       @id @default(cuid())
+  tournamentId   String
+  roundId        String
+  homeTeamId     String
+  awayTeamId     String
+  kickoffAt      DateTime?
+  location       String?
+  status         MatchStatus  @default(SCHEDULED)
+  homeScore      Int?
+  awayScore      Int?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  tournament     Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  round          Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  homeTeam       Team         @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Cascade)
+  awayTeam       Team         @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Cascade)
+  goalEvents     GoalEvent[]
+  placements     SponsorPlacement[]
+
+  @@index([tournamentId, roundId])
+}
+
+model GoalEvent {
+  id               String    @id @default(cuid())
+  matchId          String
+  playerId         String?
+  teamId           String?
+  manualPlayerName String?
+  manualTeamName   String?
+  minute           Int?
+  quantity         Int       @default(1)
+  createdAt        DateTime  @default(now())
+
+  match            Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player           Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  team             Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+}
+
+model Standing {
+  id           String      @id @default(cuid())
+  tournamentId String
+  teamId       String
+  played       Int         @default(0)
+  won          Int         @default(0)
+  drawn        Int         @default(0)
+  lost         Int         @default(0)
+  goalsFor     Int         @default(0)
+  goalsAgainst Int         @default(0)
+  goalDiff     Int         @default(0)
+  points       Int         @default(0)
+  updatedAt    DateTime    @updatedAt
+
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  team         Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, teamId])
+}
+
+model Sponsor {
+  id            String              @id @default(cuid())
+  tournamentId  String
+  name          String
+  slug          String
+  logoUrl       String?
+  bannerUrl     String?
+  description   String?
+  websiteUrl    String?
+  instagramUrl  String?
+  whatsappUrl   String?
+  type          SponsorType         @default(SECONDARY)
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  tournament    Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  placements    SponsorPlacement[]
+
+  @@unique([tournamentId, slug])
+}
+
+model SponsorPlacement {
+  id            String         @id @default(cuid())
+  sponsorId     String
+  placementType PlacementType
+  tournamentId  String?
+  roundId       String?
+  matchId       String?
+  isActive      Boolean        @default(true)
+  priority      Int            @default(0)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  sponsor       Sponsor        @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+  tournament    Tournament?    @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  round         Round?         @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  match         Match?         @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([placementType, isActive])
+  @@index([roundId])
+  @@index([matchId])
+}
