@@ -4,6 +4,68 @@ const { recalculateTournamentStandings } = require('../services/standings.servic
 
 router.get('/health', controller.health);
 
+router.get('/clear-tournament-data', async (req, res) => {
+  const prisma = require('../lib/prisma');
+
+  try {
+    const slug = 'copa-mundial-club-area-1';
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { slug },
+    });
+
+    if (!tournament) {
+      return res.status(404).json({
+        ok: false,
+        error: 'Torneo no encontrado',
+      });
+    }
+
+    await prisma.goalEvent.deleteMany({
+      where: {
+        match: {
+          tournamentId: tournament.id,
+        },
+      },
+    });
+
+    await prisma.match.deleteMany({
+      where: { tournamentId: tournament.id },
+    });
+
+    await prisma.round.deleteMany({
+      where: { tournamentId: tournament.id },
+    });
+
+    await prisma.player.deleteMany({
+      where: {
+        team: {
+          tournamentId: tournament.id,
+        },
+      },
+    });
+
+    await prisma.standing.deleteMany({
+      where: { tournamentId: tournament.id },
+    });
+
+    await prisma.team.deleteMany({
+      where: { tournamentId: tournament.id },
+    });
+
+    return res.json({
+      ok: true,
+      message: 'Datos del torneo limpiados correctamente. Se conservaron el torneo y el admin.',
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      ok: false,
+      error: 'Error limpiando datos',
+    });
+  }
+});
+
 router.get('/seed', async (req, res) => {
   const prisma = require('../lib/prisma');
 
